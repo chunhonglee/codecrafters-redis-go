@@ -59,7 +59,6 @@ func handleConnection(conn net.Conn, db *map[string]string) {
 			key := inputs[4]
 			value := inputs[6]
 			(*db)[key] = value
-			fmt.Println(db)
 			_, err = conn.Write([]byte("+OK\r\n"))
 			if err != nil {
 				return
