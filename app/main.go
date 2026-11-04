@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -37,9 +38,24 @@ func handleConnection(conn net.Conn) {
 		if err != nil {
 			break
 		}
-		_, err = conn.Write([]byte("+PONG\r\n"))
-		if err != nil {
-			break
+
+		inputs := strings.Split(string(buf), "\r\n")
+		command := strings.ToLower(inputs[2])
+
+		switch command {
+		case "ping":
+			_, err = conn.Write([]byte("+PONG\r\n"))
+			if err != nil {
+				return
+			}
+		case "echo":
+			output := fmt.Sprintf("%s\r\n%s\r\n", inputs[3], inputs[4])
+			fmt.Println(output)
+			_, err = conn.Write([]byte(output))
+			if err != nil {
+				return
+			}
+
 		}
 	}
 }
