@@ -39,23 +39,36 @@ func handleConnection(conn net.Conn) {
 			break
 		}
 
-		inputs := strings.Split(string(buf), "\r\n")
+		inputs := parseRESP(buf)
 		command := strings.ToLower(inputs[2])
 
 		switch command {
 		case "ping":
-			_, err = conn.Write([]byte("+PONG\r\n"))
+			output := formatRESP("+PONG\r\n")
+			_, err = conn.Write(output)
 			if err != nil {
 				return
 			}
 		case "echo":
-			output := fmt.Sprintf("%s\r\n%s\r\n", inputs[3], inputs[4])
-			fmt.Println(output)
-			_, err = conn.Write([]byte(output))
+			output := formatRESP(inputs[4])
+			_, err = conn.Write(output)
 			if err != nil {
 				return
 			}
 
 		}
 	}
+}
+
+func parseRESP(buf []byte) []string {
+	output := strings.Split(string(buf), "\r\n")
+
+	return output
+}
+
+func formatRESP(input string) []byte {
+	length := len(input)
+	output := fmt.Sprintf("%d\r\n%s\r\n", length, input)
+
+	return []byte(output)
 }
