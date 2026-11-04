@@ -18,6 +18,7 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
+	db := make(map[string]string, 16)
 
 	for {
 		conn, err := l.Accept()
@@ -26,12 +27,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn)
+		go handleConnection(conn, &db)
 
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, db *map[string]string) {
 	buf := make([]byte, 1024)
 	for {
 		_, err := conn.Read(buf)
@@ -40,22 +41,48 @@ func handleConnection(conn net.Conn) {
 		}
 
 		inputs := parseRESP(buf)
-		command := strings.ToLower(inputs[2])
+		command := strings.ToUpper(inputs[2])
 
 		switch command {
-		case "ping":
-			output := formatRESP("+PONG\r\n")
-			_, err = conn.Write(output)
+		case "PING":
+			_, err = conn.Write([]byte("+PONG\r\n"))
 			if err != nil {
 				return
 			}
-		case "echo":
+		case "ECHO":
 			output := formatRESP(inputs[4])
 			_, err = conn.Write(output)
 			if err != nil {
 				return
 			}
+		case "SET":
+			key := inputs[4]
+			value := inputs[6]
+			(*db)[key] = value
+			fmt.Println(db)
+			_, err = conn.Write([]byte("+OK\r\n"))
+			if err != nil {
+				return
+			}
+		case "GET":
+			key := inputs[4]
+			value, ok := (*db)[key]
 
+			if !ok {
+				_, err = conn.Write([]byte("$-1\r\n"))
+				if err != nil {
+					return
+				}
+			}
+
+			output := formatRESP(value)
+			_, err = conn.Write(output)
+			if err != nil {
+				return
+			}
+		default:
+			fmt.Println("Unknown command")
+			return
 		}
 	}
 }
@@ -68,7 +95,7 @@ func parseRESP(buf []byte) []string {
 
 func formatRESP(input string) []byte {
 	length := len(input)
-	output := fmt.Sprintf("%d\r\n%s\r\n", length, input)
+	output := fmt.Sprintf("$%d\r\n%s\r\n", length, input)
 
 	return []byte(output)
 }
