@@ -118,7 +118,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			expiry = now.Add(duration)
 		}
 		s.db[k] = value{data: d, expiry: expiry}
-		fmt.Println(s.db)
 
 		output := encodeSimpleString("OK")
 		_, err := conn.Write(output)
