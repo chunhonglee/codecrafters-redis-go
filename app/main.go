@@ -38,5 +38,8 @@ func handleConnection(conn net.Conn) {
 			break
 		}
 		_, err = conn.Write([]byte("+PONG\r\n"))
+		if err != nil {
+			break
+		}
 	}
 }
