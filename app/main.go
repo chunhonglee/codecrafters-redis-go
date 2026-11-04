@@ -52,6 +52,7 @@ func (s *server) handleConnection(conn net.Conn) {
 	for {
 		_, err := conn.Read(buf)
 		if err != nil {
+			fmt.Println("Error reading buffer: ", err.Error())
 			break
 		}
 
@@ -60,23 +61,8 @@ func (s *server) handleConnection(conn net.Conn) {
 	}
 }
 
-func encodeSimpleString(s string) []byte {
-	return fmt.Appendf(nil, "+%s\r\n", s)
-}
-
-func encodeBulkString(s string) []byte {
-	n := len(s)
-	return fmt.Appendf(nil, "$%d\r\n%s\r\n", n, s)
-}
-
-func encodeNullBulkString() []byte {
-	return fmt.Appendf(nil, "$-1\r\n")
-}
-
 func (s *server) processInput(conn net.Conn, inputs []string) {
 	n := len(inputs)
-	// fmt.Println(inputs)
-	fmt.Println(n)
 
 	if n < 3 {
 		return
@@ -116,7 +102,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			expireOption := strings.ToUpper(inputs[8])
 			expireTime, err := strconv.Atoi(inputs[10])
 			if err != nil {
-				fmt.Println("Invalid time argument")
 				return
 			}
 
@@ -127,7 +112,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			case "PX":
 				duration = duration * time.Millisecond
 			default:
-				fmt.Println("Invalid optional SET argument")
 				return
 			}
 			now := time.Now()
@@ -177,4 +161,17 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 	default:
 		return
 	}
+}
+
+func encodeSimpleString(s string) []byte {
+	return fmt.Appendf(nil, "+%s\r\n", s)
+}
+
+func encodeBulkString(s string) []byte {
+	n := len(s)
+	return fmt.Appendf(nil, "$%d\r\n%s\r\n", n, s)
+}
+
+func encodeNullBulkString() []byte {
+	return fmt.Appendf(nil, "$-1\r\n")
 }
