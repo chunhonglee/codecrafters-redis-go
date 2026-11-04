@@ -23,6 +23,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	go handleConnection(conn)
+}
+
+func handleConnection(conn net.Conn) {
 	buf := make([]byte, 1024)
 	for {
 		_, err := conn.Read(buf)
