@@ -28,7 +28,12 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	defer l.Close()
+	defer func() {
+		err := l.Close()
+		if err != nil {
+			fmt.Println("Error closing listener")
+		}
+	}()
 	s := server{db: make(map[string]value, 16)}
 
 	for {
@@ -70,6 +75,9 @@ func encodeNullBulkString() []byte {
 
 func (s *server) processInput(conn net.Conn, inputs []string) {
 	n := len(inputs)
+	// fmt.Println(inputs)
+	fmt.Println(n)
+
 	if n < 3 {
 		return
 	}
@@ -86,7 +94,8 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		if n < 5 {
 			return
 		}
-		output := encodeBulkString("")
+		input := inputs[4]
+		output := encodeBulkString(input)
 		_, err := conn.Write(output)
 		if err != nil {
 			return
@@ -98,13 +107,16 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		k := inputs[4]
 		d := inputs[6]
 
-		switch n {
-		case 6:
-			s.db[k] = value{data: d, expiry: time.Time{}}
-		case 10:
+		expiry := time.Time{}
+		if n > 8 && n < 11 {
+			return
+		}
+
+		if n > 8 && n < 13 {
 			expireOption := strings.ToUpper(inputs[8])
 			expireTime, err := strconv.Atoi(inputs[10])
 			if err != nil {
+				fmt.Println("Invalid time argument")
 				return
 			}
 
@@ -115,15 +127,14 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			case "PX":
 				duration = duration * time.Millisecond
 			default:
+				fmt.Println("Invalid optional SET argument")
 				return
 			}
 			now := time.Now()
-			expiry := now.Add(duration)
-			s.db[k] = value{data: d, expiry: expiry}
-		default:
-			return
-
+			expiry = now.Add(duration)
 		}
+		s.db[k] = value{data: d, expiry: expiry}
+		fmt.Println(s.db)
 
 		output := encodeSimpleString("OK")
 		_, err := conn.Write(output)
@@ -135,6 +146,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
+		fmt.Println(s.db)
 		k := inputs[4]
 		v, ok := s.db[k]
 		if !ok {
@@ -165,44 +177,4 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 	default:
 		return
 	}
-	// case "SET":
-	// 	key := inputs[4]
-	// 	v := inputs[6]
-	// 	// TODO: Add expiry
-	// 	// Check for length of inputs
-	// 	if len(inputs) < 10 {
-	// 		(*db)[key] = value{data: v, expiry: time.Time{}}
-	// 	} else {
-	// 		expireOption := strings.ToUpper(inputs[8])
-	// 		expireTime, err := strconv.Atoi(string(inputs[10]))
-	// 		if err != nil {
-	// 			return
-	// 		}
-	//
-	// 		switch expireOption {
-	// 		case "EX":
-	// 			now := time.Now()
-	// 			expire := time.Duration(expireTime) * time.Second
-	// 			expirationTime := now.Add(expire)
-	// 			(*db)[key] = value{data: v, expiry: expirationTime}
-	// 		case "PX":
-	// 			now := time.Now()
-	// 			expire := time.Duration(expireTime) * time.Millisecond
-	// 			expirationTime := now.Add(expire)
-	// 			(*db)[key] = value{data: v, expiry: expirationTime}
-	// 		default:
-	// 			fmt.Println("Invalid expiry option")
-	// 			return
-	// 		}
-	// 	}
-	//
-	// 	fmt.Println(db)
-	// 	_, err = conn.Write([]byte("+OK\r\n"))
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// default:
-	// 	fmt.Println("Unknown command")
-	// 	return
-	// }
 }
