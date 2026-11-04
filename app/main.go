@@ -30,12 +30,18 @@ func main() {
 	}
 
 	buf := make([]byte, 1024)
-	_, err = conn.Read(buf)
-	fmt.Println(buf)
-
-	_, err = conn.Write([]byte("+PONG\r\n"))
+	n, err := conn.Read(buf)
 	if err != nil {
-		fmt.Println("Error writing to connection: ", err.Error())
+		fmt.Println("Error reading connection: ", err.Error())
 		os.Exit(1)
+	}
+
+	for range n {
+		_, err = conn.Write([]byte("+PONG\r\n"))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			os.Exit(1)
+		}
+
 	}
 }
