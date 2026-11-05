@@ -159,12 +159,16 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 	case "LIST_KEY":
+		fmt.Println(inputs)
 		if n < 5 {
 			return
 		}
 
-		element := inputs[4]
-		s.l = append(s.l, element)
+		for i := 4; i < n; i += 2 {
+			element := inputs[i]
+			fmt.Println(element)
+			s.l = append(s.l, element)
+		}
 
 		length := len(s.l)
 		output := resp.EncodeInteger(length)
