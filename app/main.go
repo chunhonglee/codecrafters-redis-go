@@ -246,6 +246,20 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		if err != nil {
 			return
 		}
+
+	case "LLEN":
+		if n < 2 {
+			return
+		}
+		key := inputs[1]
+		l := s.l[key]
+		length := len(l)
+		output := resp.EncodeInteger(length)
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+
 	default:
 		return
 	}
