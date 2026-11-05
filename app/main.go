@@ -163,15 +163,11 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		fmt.Println(inputs)
 		key := inputs[4]
 		for i := 6; i < n-1; i += 2 {
 			element := inputs[i]
-			fmt.Println(element)
 			s.l[key] = append(s.l[key], element)
 		}
-
-		fmt.Println(s.l)
 
 		length := len(s.l[key])
 		output := resp.EncodeInteger(length)
