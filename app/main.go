@@ -229,6 +229,23 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
+	case "LPUSH":
+		if n < 3 {
+			return
+		}
+
+		key := inputs[1]
+		for i := 2; i < n; i++ {
+			element := inputs[i]
+			s.l[key] = append([]string{element}, s.l[key]...)
+		}
+
+		length := len(s.l[key])
+		output := resp.EncodeInteger(length)
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
 	default:
 		return
 	}
