@@ -169,6 +169,8 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			s.l[key] = append(s.l[key], element)
 		}
 
+		fmt.Println(s.l)
+
 		length := len(s.l[key])
 		output := resp.EncodeInteger(length)
 		_, err := conn.Write(output)
