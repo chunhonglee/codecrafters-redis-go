@@ -58,18 +58,30 @@ func (s *server) handleConnection(conn net.Conn) {
 			break
 		}
 
-		inputs := strings.Split(string(buf), "\r\n")
+		inputs := parseInput(string(buf))
 		s.processInput(conn, inputs)
 	}
+}
+
+func parseInput(buf string) []string {
+	inputs := []string{}
+	buffer := strings.Split(string(buf), "\r\n")
+	n := len(buffer)
+	for i := 2; i < n-1; i += 2 {
+		element := buffer[i]
+		inputs = append(inputs, element)
+	}
+
+	return inputs
 }
 
 func (s *server) processInput(conn net.Conn, inputs []string) {
 	n := len(inputs)
 
-	if n < 3 {
+	if n < 1 {
 		return
 	}
-	command := strings.ToUpper(inputs[2])
+	command := strings.ToUpper(inputs[0])
 
 	switch command {
 	case "PING":
@@ -79,30 +91,30 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 	case "ECHO":
-		if n < 5 {
+		if n < 2 {
 			return
 		}
-		input := inputs[4]
+		input := inputs[1]
 		output := resp.EncodeBulkString(input)
 		_, err := conn.Write(output)
 		if err != nil {
 			return
 		}
 	case "SET":
-		if n < 7 {
+		if n < 3 {
 			return
 		}
-		k := inputs[4]
-		d := inputs[6]
+		k := inputs[1]
+		d := inputs[2]
 
 		expiry := time.Time{}
-		if n > 8 && n < 11 {
+		if n > 3 && n < 5 {
 			return
 		}
 
-		if n > 8 && n < 13 {
-			expireOption := strings.ToUpper(inputs[8])
-			expireTime, err := strconv.Atoi(inputs[10])
+		if n > 3 && n < 6 {
+			expireOption := strings.ToUpper(inputs[3])
+			expireTime, err := strconv.Atoi(inputs[4])
 			if err != nil {
 				return
 			}
@@ -127,11 +139,11 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 	case "GET":
-		if n < 5 {
+		if n < 2 {
 			return
 		}
 
-		k := inputs[4]
+		k := inputs[1]
 		v, ok := s.db[k]
 		if !ok {
 			output := resp.EncodeNullBulkString()
@@ -159,12 +171,12 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 	case "RPUSH":
-		if n < 8 {
+		if n < 3 {
 			return
 		}
 
-		key := inputs[4]
-		for i := 6; i < n-1; i += 2 {
+		key := inputs[1]
+		for i := 2; i < n; i++ {
 			element := inputs[i]
 			s.l[key] = append(s.l[key], element)
 		}
