@@ -217,7 +217,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		case start > stop:
 			res = []string{}
 		default:
-			res = l[start:min(stop+1, length+1)]
+			res = l[start:min(stop+1, length)]
 		}
 
 		output := resp.EncodeArray(res)
