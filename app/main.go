@@ -216,7 +216,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 		if stop < 0 {
-			start += length
+			stop += length
 		}
 
 		if start < length || start <= stop {
