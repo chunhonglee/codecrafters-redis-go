@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 type value struct {
@@ -16,6 +18,7 @@ type value struct {
 
 type server struct {
 	db map[string]value
+	l  []string
 }
 
 func main() {
@@ -34,7 +37,7 @@ func main() {
 			fmt.Println("Error closing listener")
 		}
 	}()
-	s := server{db: make(map[string]value, 16)}
+	s := server{db: make(map[string]value, 16), l: []string{}}
 
 	for {
 		conn, err := l.Accept()
@@ -52,7 +55,6 @@ func (s *server) handleConnection(conn net.Conn) {
 	for {
 		_, err := conn.Read(buf)
 		if err != nil {
-			fmt.Println("Error reading buffer: ", err.Error())
 			break
 		}
 
@@ -71,7 +73,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 
 	switch command {
 	case "PING":
-		output := encodeSimpleString("PONG")
+		output := resp.EncodeSimpleString("PONG")
 		_, err := conn.Write(output)
 		if err != nil {
 			return
@@ -81,7 +83,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 		input := inputs[4]
-		output := encodeBulkString(input)
+		output := resp.EncodeBulkString(input)
 		_, err := conn.Write(output)
 		if err != nil {
 			return
@@ -119,7 +121,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 		s.db[k] = value{data: d, expiry: expiry}
 
-		output := encodeSimpleString("OK")
+		output := resp.EncodeSimpleString("OK")
 		_, err := conn.Write(output)
 		if err != nil {
 			return
@@ -129,11 +131,10 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		fmt.Println(s.db)
 		k := inputs[4]
 		v, ok := s.db[k]
 		if !ok {
-			output := encodeNullBulkString()
+			output := resp.EncodeNullBulkString()
 			_, err := conn.Write(output)
 			if err != nil {
 				return
@@ -143,7 +144,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		now := time.Now()
 		expiry := v.expiry
 		if now.After(expiry) && !expiry.IsZero() {
-			output := encodeNullBulkString()
+			output := resp.EncodeNullBulkString()
 			_, err := conn.Write(output)
 			if err != nil {
 				return
@@ -151,7 +152,22 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		output := encodeBulkString(v.data)
+		output := resp.EncodeBulkString(v.data)
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+
+	case "LIST_KEY":
+		if n < 5 {
+			return
+		}
+
+		element := inputs[4]
+		s.l = append(s.l, element)
+
+		length := len(s.l)
+		output := resp.EncodeInteger(length)
 		_, err := conn.Write(output)
 		if err != nil {
 			return
@@ -160,17 +176,4 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 	default:
 		return
 	}
-}
-
-func encodeSimpleString(s string) []byte {
-	return fmt.Appendf(nil, "+%s\r\n", s)
-}
-
-func encodeBulkString(s string) []byte {
-	n := len(s)
-	return fmt.Appendf(nil, "$%d\r\n%s\r\n", n, s)
-}
-
-func encodeNullBulkString() []byte {
-	return fmt.Appendf(nil, "$-1\r\n")
 }
