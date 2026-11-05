@@ -211,6 +211,14 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 		length := len(l)
+		if start < 0 {
+			start += length
+		}
+
+		if stop < 0 {
+			start += length
+		}
+
 		if start < length || start <= stop {
 			res = l[start:min(stop+1, length)]
 		}
