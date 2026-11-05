@@ -188,6 +188,35 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
+	case "LRANGE":
+		key := inputs[1]
+		l, ok := s.l[key]
+		res := []string{}
+		if !ok {
+			output := resp.EncodeArray(res)
+			_, err := conn.Write(output)
+			if err != nil {
+				return
+			}
+			return
+		}
+
+		start, err := strconv.Atoi(inputs[2])
+		if err != nil {
+			return
+		}
+		stop, err := strconv.Atoi(inputs[3])
+		if err != nil {
+			return
+		}
+
+		res = l[start : stop+1]
+		output := resp.EncodeArray(res)
+		_, err = conn.Write(output)
+		if err != nil {
+			return
+		}
+
 	default:
 		return
 	}
