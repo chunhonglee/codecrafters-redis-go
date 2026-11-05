@@ -212,11 +212,11 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 
 		length := len(l)
 		if start < 0 {
-			start += length
+			start = max(start+length, 0)
 		}
 
 		if stop < 0 {
-			stop += length
+			stop = max(stop+length, 0)
 		}
 
 		if start < length || start <= stop {
