@@ -211,14 +211,17 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 		length := len(l)
-		switch {
-		case start >= length:
-			res = []string{}
-		case start > stop:
-			res = []string{}
-		default:
+		if start < length || start <= stop {
 			res = l[start:min(stop+1, length)]
 		}
+		// switch {
+		// case start >= length:
+		// 	break
+		// case start > stop:
+		// 	break
+		// default:
+		// 	res = l[start:min(stop+1, length)]
+		// }
 
 		output := resp.EncodeArray(res)
 		_, err = conn.Write(output)
