@@ -159,8 +159,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 	case "RPUSH":
-		fmt.Println(inputs)
-		fmt.Println(n)
 		if n < 8 {
 			return
 		}
@@ -168,7 +166,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		key := inputs[4]
 		for i := 6; i < n; i += 2 {
 			element := inputs[i]
-			fmt.Println(element)
 			s.l[key] = append(s.l[key], element)
 		}
 
