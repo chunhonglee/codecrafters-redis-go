@@ -18,7 +18,7 @@ type value struct {
 
 type server struct {
 	db map[string]value
-	l  []string
+	l  map[string][]string
 }
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 			fmt.Println("Error closing listener")
 		}
 	}()
-	s := server{db: make(map[string]value, 16), l: []string{}}
+	s := server{db: make(map[string]value, 16), l: make(map[string][]string, 16)}
 
 	for {
 		conn, err := l.Accept()
@@ -158,19 +158,21 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-	case "LIST_KEY":
+	case "RPUSH":
 		fmt.Println(inputs)
-		if n < 5 {
+		fmt.Println(n)
+		if n < 8 {
 			return
 		}
 
-		for i := 4; i < n; i += 2 {
+		key := inputs[4]
+		for i := 6; i < n; i += 2 {
 			element := inputs[i]
 			fmt.Println(element)
-			s.l = append(s.l, element)
+			s.l[key] = append(s.l[key], element)
 		}
 
-		length := len(s.l)
+		length := len(s.l[key])
 		output := resp.EncodeInteger(length)
 		_, err := conn.Write(output)
 		if err != nil {
