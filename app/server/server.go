@@ -2,7 +2,6 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -233,7 +232,6 @@ func (s *Server) Llen(conn net.Conn, inputs []string) {
 }
 
 func (s *Server) Lpop(conn net.Conn, inputs []string) {
-	fmt.Println("LPOP got called")
 	n := len(inputs)
 	if n < 2 {
 		return
@@ -242,7 +240,6 @@ func (s *Server) Lpop(conn net.Conn, inputs []string) {
 	key := inputs[1]
 	l, ok := s.l[key]
 	if !ok {
-		fmt.Println("Key does not exist")
 		output := resp.EncodeNullBulkString()
 		_, err := conn.Write(output)
 		if err != nil {
@@ -286,11 +283,11 @@ func (s *Server) Lpop(conn net.Conn, inputs []string) {
 		}
 
 	}
-	result := l[0]
-	output := resp.EncodeBulkString(result)
-	_, err := conn.Write(output)
-	if err != nil {
-		return
-	}
-	s.l[key] = l[1:]
+	// result := l[0]
+	// output := resp.EncodeBulkString(result)
+	// _, err := conn.Write(output)
+	// if err != nil {
+	// 	return
+	// }
+	// s.l[key] = l[1:]
 }
