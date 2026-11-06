@@ -10,19 +10,19 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
-type Value struct {
+type value struct {
 	data   string
 	expiry time.Time
 }
 
 type Server struct {
 	Cmds map[string]func(conn net.Conn, inputs []string)
-	db   map[string]Value
+	db   map[string]value
 	l    map[string][]string
 }
 
 func New() *Server {
-	s := Server{db: make(map[string]Value, 16), l: make(map[string][]string, 16)}
+	s := Server{db: make(map[string]value, 16), l: make(map[string][]string, 16)}
 	s.Cmds = map[string]func(conn net.Conn, inputs []string){
 		"PING":   s.Ping,
 		"ECHO":   s.Echo,
@@ -91,7 +91,7 @@ func (s *Server) Set(conn net.Conn, inputs []string) {
 		now := time.Now()
 		expiry = now.Add(duration)
 	}
-	s.db[k] = Value{data: d, expiry: expiry}
+	s.db[k] = value{data: d, expiry: expiry}
 
 	output := resp.EncodeSimpleString("OK")
 	_, err := conn.Write(output)
@@ -248,46 +248,36 @@ func (s *Server) Lpop(conn net.Conn, inputs []string) {
 		return
 	}
 
-	if n >= 2 {
-		optional, err := strconv.Atoi(inputs[2])
+	optional, err := strconv.Atoi(inputs[2])
+	if err != nil {
+		result := l[0]
+		output := resp.EncodeBulkString(result)
+		_, err := conn.Write(output)
 		if err != nil {
-			result := l[0]
-			output := resp.EncodeBulkString(result)
-			_, err := conn.Write(output)
-			if err != nil {
-				return
-			}
-			s.l[key] = l[1:]
 			return
 		}
-		length := len(l)
-		if optional > length {
-			result := l
-			output := resp.EncodeArray(result)
-			_, err := conn.Write(output)
-			if err != nil {
-				return
-			}
-			s.l[key] = []string{}
-			return
-		} else {
-			result := l[:optional]
-			output := resp.EncodeArray(result)
-			_, err := conn.Write(output)
-			if err != nil {
-				return
-			}
-			s.l[key] = l[optional:]
-			return
-
-		}
-
+		s.l[key] = l[1:]
+		return
 	}
-	// result := l[0]
-	// output := resp.EncodeBulkString(result)
-	// _, err := conn.Write(output)
-	// if err != nil {
-	// 	return
-	// }
-	// s.l[key] = l[1:]
+
+	length := len(l)
+	result := l
+	if optional > length {
+		result = l
+		output := resp.EncodeArray(result)
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+		s.l[key] = []string{}
+		return
+	}
+
+	result = l[:optional]
+	output := resp.EncodeArray(result)
+	_, err = conn.Write(output)
+	if err != nil {
+		return
+	}
+	s.l[key] = l[optional:]
 }
