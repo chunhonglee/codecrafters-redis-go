@@ -347,12 +347,10 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 		return
 	}
 
-	// List is empty or doesn't exist, register as a waiter
 	ch := make(chan string, 1)
 	s.waiters[key] = append(s.waiters[key], ch)
 	s.mu.Unlock()
 
-	// Timeout of 0 means block indefinitely
 	if timeoutSec == 0 {
 		element := <-ch
 		output := resp.EncodeArray([]string{key, element})
@@ -363,7 +361,6 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 		return
 	}
 
-	// Non-zero timeout handling
 	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
 	defer timer.Stop()
 
@@ -387,14 +384,12 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 		s.mu.Unlock()
 
 		if removed {
-			// Timeout expired before any element was pushed
-			output := []byte("*-1\r\n")
+			output := resp.EncodeNullArray()
 			_, err := conn.Write(output)
 			if err != nil {
 				return
 			}
 		} else {
-			// Race condition: an element was pushed right as the timer fired
 			element := <-ch
 			output := resp.EncodeArray([]string{key, element})
 			_, err := conn.Write(output)
