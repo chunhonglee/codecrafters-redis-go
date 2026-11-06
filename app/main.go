@@ -276,14 +276,43 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		result := l[0]
-		s.l[key] = l[1:]
-		output := resp.EncodeBulkString(result)
-		_, err := conn.Write(output)
-		if err != nil {
+		if n > 2 && n < 4 {
+			optional, err := strconv.Atoi(inputs[2])
+			if err != nil {
+				return
+			}
+			length := len(l)
+			if optional > length {
+				result := l
+				s.l[key] = []string{}
+				output := resp.EncodeArray(result)
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+				return
+			} else {
+				result := l[:optional]
+				s.l[key] = l[optional:]
+				output := resp.EncodeArray(result)
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+				return
+
+			}
+
+		} else {
+			result := l[0]
+			s.l[key] = l[1:]
+			output := resp.EncodeBulkString(result)
+			_, err := conn.Write(output)
+			if err != nil {
+				return
+			}
 			return
 		}
-		return
 
 	default:
 		return
