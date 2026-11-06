@@ -276,7 +276,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		if n > 2 && n < 4 {
+		if n >= 3 {
 			optional, err := strconv.Atoi(inputs[2])
 			if err != nil {
 				return
@@ -284,33 +284,34 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			length := len(l)
 			if optional > length {
 				result := l
-				delete(s.l, key)
 				output := resp.EncodeArray(result)
 				_, err := conn.Write(output)
 				if err != nil {
 					return
 				}
+				delete(s.l, key)
 				return
 			} else {
 				result := l[:optional]
-				s.l[key] = l[optional:]
 				output := resp.EncodeArray(result)
+				fmt.Println(string(output))
 				_, err := conn.Write(output)
 				if err != nil {
 					return
 				}
+				s.l[key] = l[optional:]
 				return
 
 			}
 
 		} else {
 			result := l[0]
-			s.l[key] = l[1:]
 			output := resp.EncodeArray([]string{result})
 			_, err := conn.Write(output)
 			if err != nil {
 				return
 			}
+			s.l[key] = l[1:]
 			return
 		}
 
