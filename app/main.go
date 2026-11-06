@@ -280,6 +280,8 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 
 		if n >= 2 {
 			fmt.Println("Multiple arguments got called")
+			fmt.Println(inputs)
+			fmt.Println(n)
 			optional, err := strconv.Atoi(inputs[2])
 			if err != nil {
 				return
