@@ -269,6 +269,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		key := inputs[1]
 		l, ok := s.l[key]
 		if !ok {
+			fmt.Println("Key does not exist")
 			output := resp.EncodeNullBulkString()
 			_, err := conn.Write(output)
 			if err != nil {
@@ -277,7 +278,8 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		if n >= 3 {
+		if n >= 2 {
+			fmt.Println("Multiple arguments got called")
 			optional, err := strconv.Atoi(inputs[2])
 			if err != nil {
 				return
@@ -304,17 +306,16 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 
 			}
 
-		} else {
-			fmt.Println("No arguments")
-			result := l[0]
-			output := resp.EncodeBulkString(result)
-			_, err := conn.Write(output)
-			if err != nil {
-				return
-			}
-			s.l[key] = l[1:]
+		}
+		fmt.Println("No arguments")
+		result := l[0]
+		output := resp.EncodeBulkString(result)
+		_, err := conn.Write(output)
+		if err != nil {
 			return
 		}
+		s.l[key] = l[1:]
+		return
 
 	default:
 		return
