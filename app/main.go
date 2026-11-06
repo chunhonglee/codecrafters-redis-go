@@ -261,6 +261,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 	case "LPOP":
+		fmt.Println("LPOP got called")
 		if n < 2 {
 			return
 		}
@@ -304,6 +305,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			}
 
 		} else {
+			fmt.Println("No arguments")
 			result := l[0]
 			output := resp.EncodeBulkString(result)
 			_, err := conn.Write(output)
