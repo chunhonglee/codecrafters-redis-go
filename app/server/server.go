@@ -327,52 +327,74 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 	}
 
 	key := inputs[1]
+	timeoutSec, err := strconv.ParseFloat(inputs[2], 64)
+	if err != nil {
+		return
+	}
+
 	s.mu.Lock()
 	l, ok := s.l[key]
 	if !ok {
-
 		ch := make(chan string, 1)
 		s.waiters[key] = append(s.waiters[key], ch)
 		s.mu.Unlock()
 
-		element := <-ch
-		output := resp.EncodeArray([]string{key, element})
-		_, err := conn.Write(output)
-		if err != nil {
+		if timeoutSec == 0 {
+			element := <-ch
+			output := resp.EncodeArray([]string{key, element})
+			_, err := conn.Write(output)
+			if err != nil {
+				return
+			}
 			return
 		}
-		return
+
+		timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
+		defer timer.Stop()
+		select {
+		case element := <-ch:
+			output := resp.EncodeArray([]string{key, element})
+			_, err := conn.Write(output)
+			if err != nil {
+				return
+			}
+		case <-timer.C:
+			s.mu.Lock()
+			removed := false
+			for i, w := range s.waiters[key] {
+				if w == ch {
+					s.waiters[key] = append(s.waiters[key][:i], s.waiters[key][i+1:]...)
+					removed = true
+					break
+				}
+			}
+			s.mu.Unlock()
+
+			if removed {
+				output := resp.EncodeArray([]string{})
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+
+			} else {
+				element := <-ch
+				output := resp.EncodeArray([]string{key, element})
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+			}
+		}
+
 	}
 	element := l[0]
 	s.l[key] = l[1:]
 	s.mu.Unlock()
 
 	output := resp.EncodeArray([]string{key, element})
-	_, err := conn.Write(output)
+	_, err = conn.Write(output)
 	if err != nil {
 		return
 	}
-
-	// if l, ok := s.l[key]; ok && len(l) > 0 {
-	// 	element := l[0]
-	// 	s.l[key] = l[1:]
-	// 	s.mu.Unlock()
-	//
-	// 	output := resp.EncodeArray([]string{key, element})
-	// 	_, err := conn.Write(output)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// }
-	//
-	// ch := make(chan string, 1)
-	// s.waiters[key] = append(s.waiters[key], ch)
-	// s.mu.Unlock()
-	//
-	// element := <-ch
-	// output := resp.EncodeArray([]string{key, element})
-	// _, err := conn.Write(output)
-	// if err != nil {
-	// 	return
-	// }
 }
