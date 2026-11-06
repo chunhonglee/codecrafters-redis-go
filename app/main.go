@@ -268,7 +268,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		key := inputs[1]
 		l, ok := s.l[key]
 		if !ok {
-			output := resp.EncodeArray([]string{})
+			output := resp.EncodeNullBulkString()
 			_, err := conn.Write(output)
 			if err != nil {
 				return
@@ -289,12 +289,11 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 				if err != nil {
 					return
 				}
-				delete(s.l, key)
+				s.l[key] = []string{}
 				return
 			} else {
 				result := l[:optional]
 				output := resp.EncodeArray(result)
-				fmt.Println(string(output))
 				_, err := conn.Write(output)
 				if err != nil {
 					return
@@ -306,12 +305,12 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 
 		} else {
 			result := l[0]
-			s.l[key] = l[1:]
 			output := resp.EncodeBulkString(result)
 			_, err := conn.Write(output)
 			if err != nil {
 				return
 			}
+			s.l[key] = l[1:]
 			return
 		}
 
