@@ -278,7 +278,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		if n >= 3 {
+		if n == 2 {
 			fmt.Println("Multiple arguments got called")
 			fmt.Println(inputs)
 			fmt.Println(n)
