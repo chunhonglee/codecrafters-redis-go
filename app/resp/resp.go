@@ -33,3 +33,7 @@ func EncodeArray(arr []string) []byte {
 	}
 	return []byte(output.String())
 }
+
+func EncodeNullArray() []byte {
+	return fmt.Appendf(nil, "*-1\r\n")
+}

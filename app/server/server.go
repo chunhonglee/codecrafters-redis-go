@@ -371,7 +371,7 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 			s.mu.Unlock()
 
 			if removed {
-				output := resp.EncodeArray([]string{})
+				output := resp.EncodeNullArray()
 				_, err := conn.Write(output)
 				if err != nil {
 					return
