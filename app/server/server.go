@@ -250,15 +250,14 @@ func (s *Server) Lpop(conn net.Conn, inputs []string) {
 
 	optional, err := strconv.Atoi(inputs[2])
 	if err != nil {
-		optional = 1
-		// result := l[0]
-		// output := resp.EncodeBulkString(result)
-		// _, err := conn.Write(output)
-		// if err != nil {
-		// 	return
-		// }
-		// s.l[key] = l[1:]
-		// return
+		result := l[0]
+		output := resp.EncodeBulkString(result)
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+		s.l[key] = l[1:]
+		return
 	}
 
 	length := len(l)
