@@ -265,8 +265,8 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		key := inputs[1]
 		if n > 2 && n < 4 {
+			key := inputs[1]
 			l, ok := s.l[key]
 			if !ok {
 				output := resp.EncodeArray([]string{})
@@ -291,6 +291,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 				}
 				return
 			} else {
+				key := inputs[1]
 				l, ok := s.l[key]
 				if !ok {
 					output := resp.EncodeNullBulkString()
@@ -312,6 +313,16 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			}
 
 		} else {
+			key := inputs[1]
+			l, ok := s.l[key]
+			if !ok {
+				output := resp.EncodeNullBulkString()
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+				return
+			}
 			result := l[0]
 			s.l[key] = l[1:]
 			output := resp.EncodeBulkString(result)
