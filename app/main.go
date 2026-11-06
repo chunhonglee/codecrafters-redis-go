@@ -284,7 +284,7 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			length := len(l)
 			if optional > length {
 				result := l
-				s.l[key] = []string{}
+				delete(s.l, key)
 				output := resp.EncodeArray(result)
 				_, err := conn.Write(output)
 				if err != nil {
