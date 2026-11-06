@@ -266,17 +266,16 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 		}
 
 		key := inputs[1]
-		l, ok := s.l[key]
-		if !ok {
-			output := resp.EncodeNullBulkString()
-			_, err := conn.Write(output)
-			if err != nil {
+		if n > 2 && n < 4 {
+			l, ok := s.l[key]
+			if !ok {
+				output := resp.EncodeArray([]string{})
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
 				return
 			}
-			return
-		}
-
-		if n > 2 && n < 4 {
 			optional, err := strconv.Atoi(inputs[2])
 			if err != nil {
 				return
@@ -292,6 +291,15 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 				}
 				return
 			} else {
+				l, ok := s.l[key]
+				if !ok {
+					output := resp.EncodeNullBulkString()
+					_, err := conn.Write(output)
+					if err != nil {
+						return
+					}
+					return
+				}
 				result := l[:optional]
 				s.l[key] = l[optional:]
 				output := resp.EncodeArray(result)
