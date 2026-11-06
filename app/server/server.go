@@ -334,67 +334,73 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 
 	s.mu.Lock()
 	l, ok := s.l[key]
-	if !ok {
-		ch := make(chan string, 1)
-		s.waiters[key] = append(s.waiters[key], ch)
+	if ok && len(l) > 0 {
+		element := l[0]
+		s.l[key] = l[1:]
 		s.mu.Unlock()
 
-		if timeoutSec == 0 {
+		output := resp.EncodeArray([]string{key, element})
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+		return
+	}
+
+	// List is empty or doesn't exist, register as a waiter
+	ch := make(chan string, 1)
+	s.waiters[key] = append(s.waiters[key], ch)
+	s.mu.Unlock()
+
+	// Timeout of 0 means block indefinitely
+	if timeoutSec == 0 {
+		element := <-ch
+		output := resp.EncodeArray([]string{key, element})
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+		return
+	}
+
+	// Non-zero timeout handling
+	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
+	defer timer.Stop()
+
+	select {
+	case element := <-ch:
+		output := resp.EncodeArray([]string{key, element})
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+	case <-timer.C:
+		s.mu.Lock()
+		removed := false
+		for i, w := range s.waiters[key] {
+			if w == ch {
+				s.waiters[key] = append(s.waiters[key][:i], s.waiters[key][i+1:]...)
+				removed = true
+				break
+			}
+		}
+		s.mu.Unlock()
+
+		if removed {
+			// Timeout expired before any element was pushed
+			output := []byte("*-1\r\n")
+			_, err := conn.Write(output)
+			if err != nil {
+				return
+			}
+		} else {
+			// Race condition: an element was pushed right as the timer fired
 			element := <-ch
 			output := resp.EncodeArray([]string{key, element})
 			_, err := conn.Write(output)
 			if err != nil {
 				return
 			}
-			return
 		}
-
-		timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
-		defer timer.Stop()
-		select {
-		case element := <-ch:
-			output := resp.EncodeArray([]string{key, element})
-			_, err := conn.Write(output)
-			if err != nil {
-				return
-			}
-		case <-timer.C:
-			s.mu.Lock()
-			removed := false
-			for i, w := range s.waiters[key] {
-				if w == ch {
-					s.waiters[key] = append(s.waiters[key][:i], s.waiters[key][i+1:]...)
-					removed = true
-					break
-				}
-			}
-			s.mu.Unlock()
-
-			if removed {
-				output := resp.EncodeNullArray()
-				_, err := conn.Write(output)
-				if err != nil {
-					return
-				}
-
-			} else {
-				element := <-ch
-				output := resp.EncodeArray([]string{key, element})
-				_, err := conn.Write(output)
-				if err != nil {
-					return
-				}
-			}
-		}
-
-	}
-	element := l[0]
-	s.l[key] = l[1:]
-	s.mu.Unlock()
-
-	output := resp.EncodeArray([]string{key, element})
-	_, err = conn.Write(output)
-	if err != nil {
-		return
 	}
 }
