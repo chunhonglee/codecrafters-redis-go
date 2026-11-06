@@ -158,17 +158,19 @@ func (s *Server) Rpush(conn net.Conn, inputs []string) {
 	key := inputs[1]
 
 	s.mu.Lock()
+	sentToWaiters := 0
 	for i := 2; i < n; i++ {
 		element := inputs[i]
 		if len(s.waiters[key]) > 0 {
 			waiterChan := s.waiters[key][0]
 			s.waiters[key] = s.waiters[key][1:]
 			waiterChan <- element
+			sentToWaiters++
 		} else {
 			s.l[key] = append(s.l[key], element)
 		}
 	}
-	length := len(s.l[key])
+	length := len(s.l[key]) + sentToWaiters
 	s.mu.Unlock()
 
 	output := resp.EncodeInteger(length)
@@ -229,17 +231,19 @@ func (s *Server) Lpush(conn net.Conn, inputs []string) {
 
 	key := inputs[1]
 	s.mu.Lock()
+	sentToWaiters := 0
 	for i := 2; i < n; i++ {
 		element := inputs[i]
 		if len(s.waiters[key]) > 0 {
 			waiterChan := s.waiters[key][0]
 			s.waiters[key] = s.waiters[key][1:]
 			waiterChan <- element
+			sentToWaiters++
 		} else {
 			s.l[key] = append([]string{element}, s.l[key]...)
 		}
 	}
-	length := len(s.l[key])
+	length := len(s.l[key]) + sentToWaiters
 	s.mu.Unlock()
 
 	output := resp.EncodeInteger(length)
@@ -324,26 +328,51 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 
 	key := inputs[1]
 	s.mu.Lock()
-	if l, ok := s.l[key]; ok && len(l) > 0 {
-		element := l[0]
-		s.l[key] = l[1:]
+	l, ok := s.l[key]
+	if !ok {
+
+		ch := make(chan string, 1)
+		s.waiters[key] = append(s.waiters[key], ch)
 		s.mu.Unlock()
 
+		element := <-ch
 		output := resp.EncodeArray([]string{key, element})
 		_, err := conn.Write(output)
 		if err != nil {
 			return
 		}
+		return
 	}
-
-	ch := make(chan string, 1)
-	s.waiters[key] = append(s.waiters[key], ch)
+	element := l[0]
+	s.l[key] = l[1:]
 	s.mu.Unlock()
 
-	element := <-ch
 	output := resp.EncodeArray([]string{key, element})
 	_, err := conn.Write(output)
 	if err != nil {
 		return
 	}
+
+	// if l, ok := s.l[key]; ok && len(l) > 0 {
+	// 	element := l[0]
+	// 	s.l[key] = l[1:]
+	// 	s.mu.Unlock()
+	//
+	// 	output := resp.EncodeArray([]string{key, element})
+	// 	_, err := conn.Write(output)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// }
+	//
+	// ch := make(chan string, 1)
+	// s.waiters[key] = append(s.waiters[key], ch)
+	// s.mu.Unlock()
+	//
+	// element := <-ch
+	// output := resp.EncodeArray([]string{key, element})
+	// _, err := conn.Write(output)
+	// if err != nil {
+	// 	return
+	// }
 }
