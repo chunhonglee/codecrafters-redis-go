@@ -278,12 +278,19 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			return
 		}
 
-		if n == 2 {
+		if n >= 2 {
 			fmt.Println("Multiple arguments got called")
 			fmt.Println(inputs)
 			fmt.Println(n)
 			optional, err := strconv.Atoi(inputs[2])
 			if err != nil {
+				result := l[0]
+				output := resp.EncodeBulkString(result)
+				_, err := conn.Write(output)
+				if err != nil {
+					return
+				}
+				s.l[key] = l[1:]
 				return
 			}
 			length := len(l)
@@ -309,7 +316,6 @@ func (s *server) processInput(conn net.Conn, inputs []string) {
 			}
 
 		}
-		fmt.Println("No arguments")
 		result := l[0]
 		output := resp.EncodeBulkString(result)
 		_, err := conn.Write(output)
