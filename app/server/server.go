@@ -262,18 +262,17 @@ func (s *Server) Lpop(conn net.Conn, inputs []string) {
 
 	length := len(l)
 	result := l
-	if optional > length {
-		result = l
-		output := resp.EncodeArray(result)
-		_, err := conn.Write(output)
-		if err != nil {
-			return
-		}
-		s.l[key] = []string{}
-		return
+	if optional <= length {
+		result = l[:optional]
+		// output := resp.EncodeArray(result)
+		// _, err := conn.Write(output)
+		// if err != nil {
+		// 	return
+		// }
+		// s.l[key] = []string{}
+		// return
 	}
 
-	result = l[:optional]
 	output := resp.EncodeArray(result)
 	_, err = conn.Write(output)
 	if err != nil {
