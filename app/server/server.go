@@ -448,7 +448,6 @@ func (s *Server) Type(conn net.Conn, inputs []string) {
 }
 
 func (s *Server) Xadd(conn net.Conn, inputs []string) {
-	fmt.Println(inputs)
 	n := len(inputs)
 	streamKey := inputs[1]
 	_, exist := s.streams[streamKey]
@@ -488,7 +487,6 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 
 func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 	if id == "*" {
-		fmt.Println("I got here")
 		s.mu.Lock()
 		stream := s.streams[streamKey]
 		milisecondsTime := int(time.Now().UnixMilli())
