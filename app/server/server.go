@@ -489,6 +489,7 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 	if id == "*" {
 		s.mu.Lock()
 		stream := s.streams[streamKey]
+		s.mu.Unlock()
 		milisecondsTime := int(time.Now().UnixMilli())
 		sequenceNumber := 0
 		for key := range stream {
@@ -496,7 +497,6 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
 			}
 		}
-		s.mu.Unlock()
 
 		return streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
 	}
