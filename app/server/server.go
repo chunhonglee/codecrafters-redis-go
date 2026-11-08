@@ -3,6 +3,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -22,7 +23,11 @@ type streamID struct {
 	sequenceNumber  int
 }
 
-type entry map[string]map[string]string
+func (id streamID) String() string {
+	return fmt.Sprintf("%d-%d", id.milisecondsTime, id.sequenceNumber)
+}
+
+type entry map[streamID]map[string]string
 
 type Server struct {
 	Cmds       map[string]func(conn net.Conn, inputs []string)
@@ -449,8 +454,7 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 	if !exist {
 		s.streams[streamKey] = make(entry, 16)
 	}
-	id := inputs[2]
-	err := s.validateID(id)
+	id, err := s.validateID(streamKey, inputs[2])
 	if err != nil {
 		output := resp.EncodeSimpleError(err.Error())
 		_, err := conn.Write(output)
@@ -459,7 +463,11 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 		}
 		return
 	}
-	_, exist = s.streams[id]
+	s.mu.Lock()
+	s.previousID = id
+	s.mu.Unlock()
+
+	_, exist = s.streams[streamKey][id]
 	if !exist {
 		s.streams[streamKey][id] = make(map[string]string, 16)
 	}
@@ -470,40 +478,55 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 		s.streams[streamKey][id][key] = value
 	}
 
-	output := resp.EncodeBulkString(id)
+	output := resp.EncodeBulkString(id.String())
 	_, err = conn.Write(output)
 	if err != nil {
 		return
 	}
 }
 
-func (s *Server) validateID(id string) error {
+func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 	parts := strings.Split(id, "-")
 	milisecondsTime, err1 := strconv.Atoi(parts[0])
+
+	if parts[1] == "*" {
+		stream := s.streams[streamKey]
+		sequenceNumber := 0
+		for key := range stream {
+			if key.milisecondsTime == milisecondsTime {
+				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
+			}
+		}
+
+		if milisecondsTime <= 0 && sequenceNumber <= 0 {
+			return streamID{milisecondsTime: 0, sequenceNumber: 1}, nil
+		}
+
+		return streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
+	}
+
 	sequenceNumber, err2 := strconv.Atoi(parts[1])
 	if err1 != nil || err2 != nil {
 		// NOTE: Undefined behaviour
-		return nil
+		return streamID{}, nil
 	}
 
 	if milisecondsTime <= 0 && sequenceNumber <= 0 {
-		return errors.New("The ID specified in XADD must be greater than 0-0")
+		return streamID{}, errors.New("The ID specified in XADD must be greater than 0-0")
 	}
 
 	newID := streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}
 	s.mu.Lock()
-	if (newID.milisecondsTime == s.previousID.milisecondsTime) && (newID.sequenceNumber > s.previousID.sequenceNumber) {
-		s.previousID = newID
-		s.mu.Unlock()
-		return nil
-	}
-
-	if newID.milisecondsTime > s.previousID.milisecondsTime {
-		s.previousID = newID
-		s.mu.Unlock()
-		return nil
-	}
-
+	previousID := s.previousID
 	s.mu.Unlock()
-	return errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
+
+	if (newID.milisecondsTime == previousID.milisecondsTime) && (newID.sequenceNumber > previousID.sequenceNumber) {
+		return newID, nil
+	}
+
+	if newID.milisecondsTime > previousID.milisecondsTime {
+		return newID, nil
+	}
+
+	return streamID{}, errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
 }
