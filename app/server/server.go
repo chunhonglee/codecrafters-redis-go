@@ -16,12 +16,15 @@ type value struct {
 	expiry time.Time
 }
 
+type entry map[string]map[string]string
+
 type Server struct {
 	Cmds    map[string]func(conn net.Conn, inputs []string)
 	db      map[string]value
 	l       map[string][]string
 	mu      sync.Mutex
 	waiters map[string][]chan string
+	streams map[string]entry
 }
 
 func New() *Server {
@@ -29,6 +32,7 @@ func New() *Server {
 		db:      make(map[string]value, 16),
 		l:       make(map[string][]string, 16),
 		waiters: make(map[string][]chan string),
+		streams: make(map[string]entry, 16),
 	}
 	s.Cmds = map[string]func(conn net.Conn, inputs []string){
 		"PING":   s.Ping,
@@ -42,6 +46,7 @@ func New() *Server {
 		"LPOP":   s.Lpop,
 		"BLPOP":  s.Blpop,
 		"TYPE":   s.Type,
+		"XADD":   s.Xadd,
 	}
 
 	return &s
@@ -408,13 +413,48 @@ func (s *Server) Type(conn net.Conn, inputs []string) {
 	}
 
 	key := inputs[1]
-	_, ok := s.db[key]
 	output := resp.EncodeSimpleString("none")
+
+	s.mu.Lock()
+	_, ok := s.db[key]
+	s.mu.Unlock()
 
 	if ok {
 		output = resp.EncodeSimpleString("string")
 	}
 
+	// TODO: Check if it is a stream
+	_, ok = s.streams[key]
+	if ok {
+		output = resp.EncodeSimpleString("stream")
+	}
+
+	_, err := conn.Write(output)
+	if err != nil {
+		return
+	}
+}
+
+func (s *Server) Xadd(conn net.Conn, inputs []string) {
+	n := len(inputs)
+	streamKey := inputs[1]
+	_, exist := s.streams[streamKey]
+	if !exist {
+		s.streams[streamKey] = make(entry, 16)
+	}
+	id := inputs[2]
+	_, exist = s.streams[id]
+	if !exist {
+		s.streams[streamKey][id] = make(map[string]string, 16)
+	}
+
+	for i := 3; i < n; i += 2 {
+		key := inputs[i]
+		value := inputs[i+1]
+		s.streams[streamKey][id][key] = value
+	}
+
+	output := resp.EncodeBulkString(id)
 	_, err := conn.Write(output)
 	if err != nil {
 		return
