@@ -448,6 +448,7 @@ func (s *Server) Type(conn net.Conn, inputs []string) {
 }
 
 func (s *Server) Xadd(conn net.Conn, inputs []string) {
+	fmt.Println(inputs)
 	n := len(inputs)
 	streamKey := inputs[1]
 	_, exist := s.streams[streamKey]
@@ -486,10 +487,27 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 }
 
 func (s *Server) validateID(streamKey string, id string) (streamID, error) {
+	if id == "*" {
+		fmt.Println("I got here")
+		s.mu.Lock()
+		stream := s.streams[streamKey]
+		milisecondsTime := int(time.Now().UnixMilli())
+		sequenceNumber := 0
+		for key := range stream {
+			if key.milisecondsTime == milisecondsTime {
+				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
+			}
+		}
+		s.mu.Unlock()
+
+		return streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
+	}
+
 	parts := strings.Split(id, "-")
 	milisecondsTime, err1 := strconv.Atoi(parts[0])
 
 	if parts[1] == "*" {
+		s.mu.Lock()
 		stream := s.streams[streamKey]
 		sequenceNumber := 0
 		for key := range stream {
@@ -497,6 +515,7 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
 			}
 		}
+		s.mu.Unlock()
 
 		if milisecondsTime <= 0 && sequenceNumber <= 0 {
 			return streamID{milisecondsTime: 0, sequenceNumber: 1}, nil
