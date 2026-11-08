@@ -2,6 +2,7 @@
 package server
 
 import (
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -16,23 +17,30 @@ type value struct {
 	expiry time.Time
 }
 
+type streamID struct {
+	milisecondsTime int
+	sequenceNumber  int
+}
+
 type entry map[string]map[string]string
 
 type Server struct {
-	Cmds    map[string]func(conn net.Conn, inputs []string)
-	db      map[string]value
-	l       map[string][]string
-	mu      sync.Mutex
-	waiters map[string][]chan string
-	streams map[string]entry
+	Cmds       map[string]func(conn net.Conn, inputs []string)
+	db         map[string]value
+	l          map[string][]string
+	mu         sync.Mutex
+	waiters    map[string][]chan string
+	streams    map[string]entry
+	previousID streamID
 }
 
 func New() *Server {
 	s := Server{
-		db:      make(map[string]value, 16),
-		l:       make(map[string][]string, 16),
-		waiters: make(map[string][]chan string),
-		streams: make(map[string]entry, 16),
+		db:         make(map[string]value, 16),
+		l:          make(map[string][]string, 16),
+		waiters:    make(map[string][]chan string),
+		streams:    make(map[string]entry, 16),
+		previousID: streamID{milisecondsTime: 0, sequenceNumber: 0},
 	}
 	s.Cmds = map[string]func(conn net.Conn, inputs []string){
 		"PING":   s.Ping,
@@ -423,7 +431,6 @@ func (s *Server) Type(conn net.Conn, inputs []string) {
 		output = resp.EncodeSimpleString("string")
 	}
 
-	// TODO: Check if it is a stream
 	_, ok = s.streams[key]
 	if ok {
 		output = resp.EncodeSimpleString("stream")
@@ -443,6 +450,15 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 		s.streams[streamKey] = make(entry, 16)
 	}
 	id := inputs[2]
+	err := s.validateID(id)
+	if err != nil {
+		output := resp.EncodeSimpleError(err.Error())
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+		return
+	}
 	_, exist = s.streams[id]
 	if !exist {
 		s.streams[streamKey][id] = make(map[string]string, 16)
@@ -455,8 +471,39 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 	}
 
 	output := resp.EncodeBulkString(id)
-	_, err := conn.Write(output)
+	_, err = conn.Write(output)
 	if err != nil {
 		return
 	}
+}
+
+func (s *Server) validateID(id string) error {
+	parts := strings.Split(id, "-")
+	milisecondsTime, err1 := strconv.Atoi(parts[0])
+	sequenceNumber, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		// NOTE: Undefined behaviour
+		return nil
+	}
+
+	if milisecondsTime <= 0 && sequenceNumber <= 0 {
+		return errors.New("The ID specified in XADD must be greater than 0-0")
+	}
+
+	newID := streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}
+	s.mu.Lock()
+	if (newID.milisecondsTime == s.previousID.milisecondsTime) && (newID.sequenceNumber > s.previousID.sequenceNumber) {
+		s.previousID = newID
+		s.mu.Unlock()
+		return nil
+	}
+
+	if newID.milisecondsTime > s.previousID.milisecondsTime {
+		s.previousID = newID
+		s.mu.Unlock()
+		return nil
+	}
+
+	s.mu.Unlock()
+	return errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
 }

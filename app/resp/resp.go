@@ -37,3 +37,7 @@ func EncodeArray(arr []string) []byte {
 func EncodeNullArray() []byte {
 	return fmt.Appendf(nil, "*-1\r\n")
 }
+
+func EncodeSimpleError(err string) []byte {
+	return fmt.Appendf(nil, "-Err %s\r\n", err)
+}
