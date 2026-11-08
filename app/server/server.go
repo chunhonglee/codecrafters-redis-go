@@ -41,6 +41,7 @@ func New() *Server {
 		"LLEN":   s.Llen,
 		"LPOP":   s.Lpop,
 		"BLPOP":  s.Blpop,
+		"TYPE":   s.Type,
 	}
 
 	return &s
@@ -397,5 +398,25 @@ func (s *Server) Blpop(conn net.Conn, inputs []string) {
 				return
 			}
 		}
+	}
+}
+
+func (s *Server) Type(conn net.Conn, inputs []string) {
+	n := len(inputs)
+	if n < 1 {
+		return
+	}
+
+	key := inputs[1]
+	_, ok := s.db[key]
+	output := resp.EncodeSimpleString("none")
+
+	if ok {
+		output = resp.EncodeSimpleString("string")
+	}
+
+	_, err := conn.Write(output)
+	if err != nil {
+		return
 	}
 }
