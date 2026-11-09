@@ -4,6 +4,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -19,12 +20,12 @@ type value struct {
 }
 
 type streamID struct {
-	milisecondsTime int
-	sequenceNumber  int
+	millisecondsTime int
+	sequenceNumber   int
 }
 
 func (id streamID) String() string {
-	return fmt.Sprintf("%d-%d", id.milisecondsTime, id.sequenceNumber)
+	return fmt.Sprintf("%d-%d", id.millisecondsTime, id.sequenceNumber)
 }
 
 type entry map[streamID]map[string]string
@@ -45,7 +46,7 @@ func New() *Server {
 		l:          make(map[string][]string, 16),
 		waiters:    make(map[string][]chan string),
 		streams:    make(map[string]entry, 16),
-		previousID: streamID{milisecondsTime: 0, sequenceNumber: 0},
+		previousID: streamID{millisecondsTime: 0, sequenceNumber: 0},
 	}
 	s.Cmds = map[string]func(conn net.Conn, inputs []string){
 		"PING":   s.Ping,
@@ -60,6 +61,7 @@ func New() *Server {
 		"BLPOP":  s.Blpop,
 		"TYPE":   s.Type,
 		"XADD":   s.Xadd,
+		"XRANGE": s.Xrange,
 	}
 
 	return &s
@@ -493,12 +495,12 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 		milisecondsTime := int(time.Now().UnixMilli())
 		sequenceNumber := 0
 		for key := range stream {
-			if key.milisecondsTime == milisecondsTime {
+			if key.millisecondsTime == milisecondsTime {
 				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
 			}
 		}
 
-		return streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
+		return streamID{millisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
 	}
 
 	parts := strings.Split(id, "-")
@@ -509,17 +511,17 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 		stream := s.streams[streamKey]
 		sequenceNumber := 0
 		for key := range stream {
-			if key.milisecondsTime == milisecondsTime {
+			if key.millisecondsTime == milisecondsTime {
 				sequenceNumber = max(sequenceNumber, key.sequenceNumber+1)
 			}
 		}
 		s.mu.Unlock()
 
 		if milisecondsTime <= 0 && sequenceNumber <= 0 {
-			return streamID{milisecondsTime: 0, sequenceNumber: 1}, nil
+			return streamID{millisecondsTime: 0, sequenceNumber: 1}, nil
 		}
 
-		return streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
+		return streamID{millisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}, nil
 	}
 
 	sequenceNumber, err2 := strconv.Atoi(parts[1])
@@ -532,18 +534,83 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 		return streamID{}, errors.New("The ID specified in XADD must be greater than 0-0")
 	}
 
-	newID := streamID{milisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}
+	newID := streamID{millisecondsTime: milisecondsTime, sequenceNumber: sequenceNumber}
 	s.mu.Lock()
 	previousID := s.previousID
 	s.mu.Unlock()
 
-	if (newID.milisecondsTime == previousID.milisecondsTime) && (newID.sequenceNumber > previousID.sequenceNumber) {
+	if (newID.millisecondsTime == previousID.millisecondsTime) && (newID.sequenceNumber > previousID.sequenceNumber) {
 		return newID, nil
 	}
 
-	if newID.milisecondsTime > previousID.milisecondsTime {
+	if newID.millisecondsTime > previousID.millisecondsTime {
 		return newID, nil
 	}
 
 	return streamID{}, errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
+}
+
+func (s *Server) Xrange(conn net.Conn, inputs []string) {
+	n := len(inputs)
+	if n < 3 {
+		return
+	}
+
+	key := inputs[1]
+	start := inputs[2]
+	end := inputs[3]
+
+	entries := s.streams[key]
+	startMillisecondsTime, startSequenceNumber := parseStreamID(start)
+	endMillisecondsTime, endSequenceNumber := parseStreamID(end)
+
+	result := entry{}
+	for e := range entries {
+		validMillisecondsTime := (e.millisecondsTime >= *startMillisecondsTime && e.millisecondsTime <= *endMillisecondsTime)
+		validSequenceNumber := (e.sequenceNumber >= *startSequenceNumber && e.sequenceNumber <= *endSequenceNumber)
+		if validMillisecondsTime && validSequenceNumber {
+			result[e] = entries[e]
+		}
+	}
+
+	finalSlice := []string{}
+	for r := range result {
+		entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
+		bulkString := resp.EncodeBulkString(entryID)
+		inner := result[r]
+		innerSlice := []string{}
+		for pair := range inner {
+			innerSlice = append(innerSlice, pair)
+			innerSlice = append(innerSlice, inner[pair])
+		}
+		bulkStringArray := resp.EncodeArray(innerSlice)
+		result := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
+		finalSlice = append(finalSlice, string(result))
+	}
+	output := resp.EncodeArray(finalSlice)
+	_, err := conn.Write(output)
+	if err != nil {
+		return
+	}
+}
+
+func parseStreamID(input string) (*int, *int) {
+	if !strings.Contains(input, "-") {
+		millisecondsTime, err := strconv.Atoi(input)
+		maxInt := math.MaxInt
+		if err != nil {
+			return nil, nil
+		}
+		return &millisecondsTime, &maxInt
+	}
+
+	parts := strings.Split(input, "-")
+	millisecondsTime, err1 := strconv.Atoi(parts[0])
+	sequenceNumber, err2 := strconv.Atoi(parts[1])
+
+	if err1 != nil || err2 != nil {
+		return nil, nil
+	}
+
+	return &millisecondsTime, &sequenceNumber
 }
