@@ -561,8 +561,8 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 	end := inputs[3]
 
 	entries := s.streams[key]
-	startMillisecondsTime, startSequenceNumber := parseStreamID(start)
-	endMillisecondsTime, endSequenceNumber := parseStreamID(end)
+	startMillisecondsTime, startSequenceNumber := parseStreamID(start, true)
+	endMillisecondsTime, endSequenceNumber := parseStreamID(end, false)
 
 	result := entry{}
 	for e := range entries {
@@ -572,13 +572,12 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 			result[e] = entries[e]
 		}
 	}
-	fmt.Println(result)
 
 	finalSlice := []string{}
 	for r := range result {
 		entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
-		fmt.Println(entryID)
 		bulkString := resp.EncodeBulkString(entryID)
+		fmt.Printf("%q\n", bulkString)
 		inner := result[r]
 		innerSlice := []string{}
 		for pair := range inner {
@@ -586,24 +585,32 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 			innerSlice = append(innerSlice, inner[pair])
 		}
 		bulkStringArray := resp.EncodeArray(innerSlice)
-		fmt.Println(innerSlice)
-		encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
-		finalSlice = append(finalSlice, string(encodedArray))
+		fmt.Printf("%q\n", bulkStringArray)
+		// encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
+		// finalSlice = append(finalSlice, string(encodedArray))
+		finalSlice = append(finalSlice, string(bulkString))
+		finalSlice = append(finalSlice, string(bulkStringArray))
 	}
+
 	output := resp.EncodeArray(finalSlice)
+	fmt.Printf("%q", output)
 	_, err := conn.Write(output)
 	if err != nil {
 		return
 	}
 }
 
-func parseStreamID(input string) (*int, *int) {
+func parseStreamID(input string, start bool) (*int, *int) {
 	if !strings.Contains(input, "-") {
 		millisecondsTime, err := strconv.Atoi(input)
-		maxInt := math.MaxInt
 		if err != nil {
 			return nil, nil
 		}
+		if start {
+			minInt := 0
+			return &millisecondsTime, &minInt
+		}
+		maxInt := math.MaxInt
 		return &millisecondsTime, &maxInt
 	}
 
