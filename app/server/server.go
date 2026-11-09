@@ -577,6 +577,7 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 	for r := range result {
 		entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
 		bulkString := resp.EncodeBulkString(entryID)
+		fmt.Println(string(bulkString))
 		inner := result[r]
 		innerSlice := []string{}
 		for pair := range inner {
