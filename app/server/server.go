@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -550,77 +551,196 @@ func (s *Server) validateID(streamKey string, id string) (streamID, error) {
 	return streamID{}, errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
 }
 
+//	func (s *Server) Xrange(conn net.Conn, inputs []string) {
+//		n := len(inputs)
+//		if n < 3 {
+//			return
+//		}
+//
+//		key := inputs[1]
+//		start := inputs[2]
+//		end := inputs[3]
+//
+//		entries := s.streams[key]
+//		startMillisecondsTime, startSequenceNumber := parseStreamID(start, true)
+//		endMillisecondsTime, endSequenceNumber := parseStreamID(end, false)
+//
+//		result := entry{}
+//		for e := range entries {
+//			validMillisecondsTime := (e.millisecondsTime >= *startMillisecondsTime && e.millisecondsTime <= *endMillisecondsTime)
+//			validSequenceNumber := (e.sequenceNumber >= *startSequenceNumber && e.sequenceNumber <= *endSequenceNumber)
+//			if validMillisecondsTime && validSequenceNumber {
+//				result[e] = entries[e]
+//			}
+//		}
+//
+//		finalSlice := []string{}
+//		for r := range result {
+//			entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
+//			bulkString := resp.EncodeBulkString(entryID)
+//			fmt.Printf("%q\n", bulkString)
+//			inner := result[r]
+//			innerSlice := []string{}
+//			for pair := range inner {
+//				innerSlice = append(innerSlice, pair)
+//				innerSlice = append(innerSlice, inner[pair])
+//			}
+//			bulkStringArray := resp.EncodeArray(innerSlice)
+//			fmt.Printf("%q\n", bulkStringArray)
+//			encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
+//			finalSlice = append(finalSlice, string(encodedArray))
+//		}
+//
+//		output := resp.EncodeArray(finalSlice)
+//		fmt.Printf("%q", output)
+//		_, err := conn.Write(output)
+//		if err != nil {
+//			return
+//		}
+//	}
+//
+//	func parseStreamID(input string, start bool) (*int, *int) {
+//		if !strings.Contains(input, "-") {
+//			millisecondsTime, err := strconv.Atoi(input)
+//			if err != nil {
+//				return nil, nil
+//			}
+//			if start {
+//				minInt := 0
+//				return &millisecondsTime, &minInt
+//			}
+//			maxInt := math.MaxInt
+//			return &millisecondsTime, &maxInt
+//		}
+//
+//		parts := strings.Split(input, "-")
+//		millisecondsTime, err1 := strconv.Atoi(parts[0])
+//		sequenceNumber, err2 := strconv.Atoi(parts[1])
+//
+//		if err1 != nil || err2 != nil {
+//			return nil, nil
+//		}
+//
+//		return &millisecondsTime, &sequenceNumber
+//	}
 func (s *Server) Xrange(conn net.Conn, inputs []string) {
 	n := len(inputs)
-	if n < 3 {
+	if n < 4 {
 		return
 	}
 
 	key := inputs[1]
-	start := inputs[2]
-	end := inputs[3]
+	startStr := inputs[2]
+	endStr := inputs[3]
 
-	entries := s.streams[key]
-	startMillisecondsTime, startSequenceNumber := parseStreamID(start, true)
-	endMillisecondsTime, endSequenceNumber := parseStreamID(end, false)
+	s.mu.Lock()
+	entries, exists := s.streams[key]
+	s.mu.Unlock()
 
-	result := entry{}
-	for e := range entries {
-		validMillisecondsTime := (e.millisecondsTime >= *startMillisecondsTime && e.millisecondsTime <= *endMillisecondsTime)
-		validSequenceNumber := (e.sequenceNumber >= *startSequenceNumber && e.sequenceNumber <= *endSequenceNumber)
-		if validMillisecondsTime && validSequenceNumber {
-			result[e] = entries[e]
-		}
-	}
-
-	finalSlice := []string{}
-	for r := range result {
-		entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
-		bulkString := resp.EncodeBulkString(entryID)
-		fmt.Printf("%q\n", bulkString)
-		inner := result[r]
-		innerSlice := []string{}
-		for pair := range inner {
-			innerSlice = append(innerSlice, pair)
-			innerSlice = append(innerSlice, inner[pair])
-		}
-		bulkStringArray := resp.EncodeArray(innerSlice)
-		fmt.Printf("%q\n", bulkStringArray)
-		// encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
-		// finalSlice = append(finalSlice, string(encodedArray))
-		finalSlice = append(finalSlice, string(bulkString))
-		finalSlice = append(finalSlice, string(bulkStringArray))
-	}
-
-	output := resp.EncodeArray(finalSlice)
-	fmt.Printf("%q", output)
-	_, err := conn.Write(output)
-	if err != nil {
+	if !exists {
+		output := resp.EncodeArray([]string{})
+		conn.Write(output)
 		return
 	}
+
+	startMs, startSeq := parseStreamID(startStr, true)
+	endMs, endSeq := parseStreamID(endStr, false)
+
+	// 1. Collect and filter matching entries
+	var matchedIDs []streamID
+	for id := range entries {
+		// Compare lexicographically: (ms, seq) >= (startMs, startSeq) AND (ms, seq) <= (endMs, endSeq)
+		afterStart := id.millisecondsTime > startMs || (id.millisecondsTime == startMs && id.sequenceNumber >= startSeq)
+		beforeEnd := id.millisecondsTime < endMs || (id.millisecondsTime == endMs && id.sequenceNumber <= endSeq)
+
+		if afterStart && beforeEnd {
+			matchedIDs = append(matchedIDs, id)
+		}
+	}
+
+	// 2. Sort the matched IDs chronologically/lexicographically
+	sort.Slice(matchedIDs, func(i, j int) bool {
+		if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
+			return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
+		}
+		return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
+	})
+
+	// 3. Construct the proper RESP Array output
+	// An XRANGE response is an array of entries: [[id, [field1, val1, field2, val2, ...]], ...]
+	var respElements []any
+	for _, id := range matchedIDs {
+		fieldsMap := entries[id]
+
+		var fieldVals []string
+		// If order of fields matters or if you store keys in a predictable order,
+		// make sure to iterate deterministically or keep them stored in order.
+		for k, v := range fieldsMap {
+			fieldVals = append(fieldVals, k, v)
+		}
+
+		entryArray := []any{
+			id.String(),
+			fieldVals,
+		}
+		respElements = append(respElements, entryArray)
+	}
+
+	output := resp.EncodeNestedArray(respElements) // Or your RESP encoder's array method supporting mixed types
+	conn.Write(output)
 }
 
-func parseStreamID(input string, start bool) (*int, *int) {
+func parseStreamID(input string, isStart bool) (int, int) {
+	if input == "-" {
+		if isStart {
+			return 0, 0
+		}
+		return math.MaxInt, math.MaxInt
+	}
+	if input == "+" {
+		if isStart {
+			return 0, 0
+		}
+		return math.MaxInt, math.MaxInt
+	}
+
 	if !strings.Contains(input, "-") {
-		millisecondsTime, err := strconv.Atoi(input)
+		ms, err := strconv.Atoi(input)
 		if err != nil {
-			return nil, nil
+			if isStart {
+				return 0, 0
+			}
+			return math.MaxInt, math.MaxInt
 		}
-		if start {
-			minInt := 0
-			return &millisecondsTime, &minInt
+		if isStart {
+			return ms, 0
 		}
-		maxInt := math.MaxInt
-		return &millisecondsTime, &maxInt
+		return ms, math.MaxInt
 	}
 
 	parts := strings.Split(input, "-")
-	millisecondsTime, err1 := strconv.Atoi(parts[0])
-	sequenceNumber, err2 := strconv.Atoi(parts[1])
-
-	if err1 != nil || err2 != nil {
-		return nil, nil
+	ms, err1 := strconv.Atoi(parts[0])
+	if err1 != nil {
+		if isStart {
+			return 0, 0
+		}
+		return math.MaxInt, math.MaxInt
 	}
 
-	return &millisecondsTime, &sequenceNumber
+	if parts[1] == "*" {
+		if isStart {
+			return ms, 0
+		}
+		return ms, math.MaxInt
+	}
+
+	seq, err2 := strconv.Atoi(parts[1])
+	if err2 != nil {
+		if isStart {
+			return ms, 0
+		}
+		return ms, math.MaxInt
+	}
+
+	return ms, seq
 }
