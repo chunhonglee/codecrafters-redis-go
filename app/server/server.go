@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -586,12 +585,12 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 		}
 	}
 
-	sort.Slice(matchedIDs, func(i, j int) bool {
-		if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
-			return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
-		}
-		return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
-	})
+	// sort.Slice(matchedIDs, func(i, j int) bool {
+	// 	if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
+	// 		return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
+	// 	}
+	// 	return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
+	// })
 
 	var respElements []any
 	for _, id := range matchedIDs {
