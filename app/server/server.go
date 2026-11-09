@@ -572,6 +572,7 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 			result[e] = entries[e]
 		}
 	}
+	fmt.Println(result)
 
 	finalSlice := []string{}
 	for r := range result {
@@ -585,8 +586,8 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 			innerSlice = append(innerSlice, inner[pair])
 		}
 		bulkStringArray := resp.EncodeArray(innerSlice)
-		result := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
-		finalSlice = append(finalSlice, string(result))
+		encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
+		finalSlice = append(finalSlice, string(encodedArray))
 	}
 	output := resp.EncodeArray(finalSlice)
 	_, err := conn.Write(output)
