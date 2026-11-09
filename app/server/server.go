@@ -577,17 +577,18 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 	finalSlice := []string{}
 	for r := range result {
 		entryID := strconv.Itoa(r.millisecondsTime) + "-" + strconv.Itoa(r.sequenceNumber)
+		fmt.Println(entryID)
 		bulkString := resp.EncodeBulkString(entryID)
-		fmt.Println(string(bulkString))
-		// inner := result[r]
-		// innerSlice := []string{}
-		// for pair := range inner {
-		// 	innerSlice = append(innerSlice, pair)
-		// 	innerSlice = append(innerSlice, inner[pair])
-		// }
-		// bulkStringArray := resp.EncodeArray(innerSlice)
-		// encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
-		// finalSlice = append(finalSlice, string(encodedArray))
+		inner := result[r]
+		innerSlice := []string{}
+		for pair := range inner {
+			innerSlice = append(innerSlice, pair)
+			innerSlice = append(innerSlice, inner[pair])
+		}
+		bulkStringArray := resp.EncodeArray(innerSlice)
+		fmt.Println(innerSlice)
+		encodedArray := resp.EncodeArray([]string{string(bulkString), string(bulkStringArray)})
+		finalSlice = append(finalSlice, string(encodedArray))
 	}
 	output := resp.EncodeArray(finalSlice)
 	_, err := conn.Write(output)
