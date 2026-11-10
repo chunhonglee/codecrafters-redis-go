@@ -576,7 +576,7 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 	startMs, startSeq := parseStreamID(startStr, true)
 	endMs, endSeq := parseStreamID(endStr, false)
 
-	var matchedIDs []streamID
+	matchedIDs := []streamID{}
 	for id := range entries {
 		afterStart := id.millisecondsTime > startMs || (id.millisecondsTime == startMs && id.sequenceNumber >= startSeq)
 		beforeEnd := id.millisecondsTime < endMs || (id.millisecondsTime == endMs && id.sequenceNumber <= endSeq)
@@ -586,18 +586,18 @@ func (s *Server) Xrange(conn net.Conn, inputs []string) {
 		}
 	}
 
-	sort.Slice(matchedIDs, func(i, j int) bool {
+	sort.Slice(matchedIDs, func(i int, j int) bool {
 		if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
 			return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
 		}
 		return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
 	})
 
-	var respElements []any
+	respElements := []any{}
 	for _, id := range matchedIDs {
 		fieldsMap := entries[id]
 
-		var fieldVals []string
+		fieldVals := []string{}
 		for k, v := range fieldsMap {
 			fieldVals = append(fieldVals, k, v)
 		}

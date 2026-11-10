@@ -42,22 +42,22 @@ func EncodeSimpleError(err string) []byte {
 	return fmt.Appendf(nil, "-ERR %s\r\n", err)
 }
 
-func EncodeNestedArray(elements []any) []byte {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "*%d\r\n", len(elements))
+func EncodeNestedArray(arr []any) []byte {
+	var output strings.Builder
+	fmt.Fprintf(&output, "*%d\r\n", len(arr))
 
-	for _, el := range elements {
+	for _, el := range arr {
 		switch v := el.(type) {
 		case string:
-			fmt.Fprintf(&sb, "$%d\r\n%s\r\n", len(v), v)
+			output.Write(EncodeBulkString(v))
 		case []string:
-			sb.Write(EncodeArray(v))
+			output.Write(EncodeArray(v))
 		case []any:
-			sb.Write(EncodeNestedArray(v))
+			output.Write(EncodeNestedArray(v))
 		case nil:
-			sb.WriteString("$-1\r\n")
+			output.Write(EncodeNullArray())
 		}
 	}
 
-	return []byte(sb.String())
+	return []byte(output.String())
 }
