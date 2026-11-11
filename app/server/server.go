@@ -476,6 +476,8 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 		s.streams[streamKey][id] = make(map[string]string, 16)
 	}
 
+	// TODO: See why this keeps breaking
+	fmt.Println(inputs)
 	for i := 3; i < n; i += 2 {
 		key := inputs[i]
 		value := inputs[i+1]
