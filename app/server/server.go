@@ -674,12 +674,13 @@ func parseStreamID(input string, isStart bool) (int, int) {
 
 func (s *Server) Xread(conn net.Conn, inputs []string) {
 	n := len(inputs)
-	if n < 3 {
+	if n < 4 {
 		return
 	}
 
-	key := inputs[1]
-	startStr := inputs[2]
+	// option := inputs[1]
+	key := inputs[2]
+	startStr := inputs[3]
 
 	s.mu.Lock()
 	entries, exists := s.streams[key]
