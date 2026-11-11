@@ -477,7 +477,6 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 	}
 
 	for i := 3; i < n-1; i += 2 {
-
 		key := inputs[i]
 		value := inputs[i+1]
 		s.streams[streamKey][id][key] = value
@@ -680,59 +679,70 @@ func (s *Server) Xread(conn net.Conn, inputs []string) {
 	}
 
 	// option := inputs[1]
-	key := inputs[2]
-	startStr := inputs[3]
 
-	s.mu.Lock()
-	entries, exists := s.streams[key]
-	s.mu.Unlock()
+	m := (n + 2) / 2
+	keys := inputs[2:m]
+	startStrs := inputs[m:n]
+	fmt.Println(inputs)
+	fmt.Println(keys, startStrs)
+	nReads := len(keys)
 
-	if !exists {
-		output := resp.EncodeArray([]string{})
-		_, err := conn.Write(output)
-		if err != nil {
-			return
+	result := []any{}
+	for i := range nReads {
+		key := keys[i]
+		startStr := startStrs[i]
+		s.mu.Lock()
+		// entries, exists := s.streams[key]
+		entries, _ := s.streams[key]
+		s.mu.Unlock()
+
+		// if !exists {
+		// 	output := resp.EncodeArray([]string{})
+		// 	_, err := conn.Write(output)
+		// 	if err != nil {
+		// 		return
+		// 	}
+		// }
+
+		startMs, startSeq := parseStreamID(startStr, true)
+		endMs, endSeq := math.MaxInt, math.MaxInt
+
+		matchedIDs := []streamID{}
+		for id := range entries {
+			afterStart := id.millisecondsTime > startMs || (id.millisecondsTime == startMs && id.sequenceNumber > startSeq)
+			beforeEnd := id.millisecondsTime < endMs || (id.millisecondsTime == endMs && id.sequenceNumber <= endSeq)
+
+			if afterStart && beforeEnd {
+				matchedIDs = append(matchedIDs, id)
+			}
 		}
+
+		sort.Slice(matchedIDs, func(i int, j int) bool {
+			if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
+				return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
+			}
+			return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
+		})
+
+		respElements := []any{}
+		for _, id := range matchedIDs {
+			fieldsMap := entries[id]
+
+			fieldVals := []string{}
+			for k, v := range fieldsMap {
+				fieldVals = append(fieldVals, k, v)
+			}
+
+			entryArray := []any{
+				id.String(),
+				fieldVals,
+			}
+			respElements = append(respElements, entryArray)
+		}
+		streamKeyArray := []any{key, respElements}
+		result = append(result, streamKeyArray)
 	}
 
-	startMs, startSeq := parseStreamID(startStr, true)
-	endMs, endSeq := math.MaxInt, math.MaxInt
-
-	matchedIDs := []streamID{}
-	for id := range entries {
-		afterStart := id.millisecondsTime > startMs || (id.millisecondsTime == startMs && id.sequenceNumber > startSeq)
-		beforeEnd := id.millisecondsTime < endMs || (id.millisecondsTime == endMs && id.sequenceNumber <= endSeq)
-
-		if afterStart && beforeEnd {
-			matchedIDs = append(matchedIDs, id)
-		}
-	}
-
-	sort.Slice(matchedIDs, func(i int, j int) bool {
-		if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
-			return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
-		}
-		return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
-	})
-
-	respElements := []any{}
-	for _, id := range matchedIDs {
-		fieldsMap := entries[id]
-
-		fieldVals := []string{}
-		for k, v := range fieldsMap {
-			fieldVals = append(fieldVals, k, v)
-		}
-
-		entryArray := []any{
-			id.String(),
-			fieldVals,
-		}
-		respElements = append(respElements, entryArray)
-	}
-
-	streamKeyArray := []any{key, respElements}
-	result := []any{streamKeyArray}
 	output := resp.EncodeNestedArray(result)
 	_, err := conn.Write(output)
 	if err != nil {
