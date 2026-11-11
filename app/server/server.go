@@ -683,8 +683,6 @@ func (s *Server) Xread(conn net.Conn, inputs []string) {
 	m := (n + 2) / 2
 	keys := inputs[2:m]
 	startStrs := inputs[m:n]
-	fmt.Println(inputs)
-	fmt.Println(keys, startStrs)
 	nReads := len(keys)
 
 	result := []any{}
@@ -693,7 +691,7 @@ func (s *Server) Xread(conn net.Conn, inputs []string) {
 		startStr := startStrs[i]
 		s.mu.Lock()
 		// entries, exists := s.streams[key]
-		entries, _ := s.streams[key]
+		entries := s.streams[key]
 		s.mu.Unlock()
 
 		// if !exists {
