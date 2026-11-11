@@ -674,7 +674,7 @@ func parseStreamID(input string, isStart bool) (int, int) {
 
 func (s *Server) Xread(conn net.Conn, inputs []string) {
 	n := len(inputs)
-	if n < 4 {
+	if n < 3 {
 		return
 	}
 
