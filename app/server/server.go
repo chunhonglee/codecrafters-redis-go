@@ -480,6 +480,9 @@ func (s *Server) Xadd(conn net.Conn, inputs []string) {
 	fmt.Println(inputs)
 	for i := 3; i < n; i += 2 {
 		key := inputs[i]
+		if i+1 >= n {
+			continue
+		}
 		value := inputs[i+1]
 		s.streams[streamKey][id][key] = value
 	}
