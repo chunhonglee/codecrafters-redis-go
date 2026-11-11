@@ -730,7 +730,8 @@ func (s *Server) Xread(conn net.Conn, inputs []string) {
 		respElements = append(respElements, entryArray)
 	}
 
-	result := []any{key, respElements}
+	streamKeyArray := []any{key, respElements}
+	result := []any{streamKeyArray}
 	output := resp.EncodeNestedArray(result)
 	_, err := conn.Write(output)
 	if err != nil {
