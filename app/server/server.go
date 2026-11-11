@@ -63,6 +63,7 @@ func New() *Server {
 		"TYPE":   s.Type,
 		"XADD":   s.Xadd,
 		"XRANGE": s.Xrange,
+		"XREAD":  s.Xread,
 	}
 
 	return &s
@@ -669,4 +670,69 @@ func parseStreamID(input string, isStart bool) (int, int) {
 	}
 
 	return ms, seq
+}
+
+func (s *Server) Xread(conn net.Conn, inputs []string) {
+	n := len(inputs)
+	if n < 4 {
+		return
+	}
+
+	key := inputs[1]
+	startStr := inputs[2]
+
+	s.mu.Lock()
+	entries, exists := s.streams[key]
+	s.mu.Unlock()
+
+	if !exists {
+		output := resp.EncodeArray([]string{})
+		_, err := conn.Write(output)
+		if err != nil {
+			return
+		}
+	}
+
+	startMs, startSeq := parseStreamID(startStr, true)
+	endMs, endSeq := math.MaxInt, math.MaxInt
+
+	matchedIDs := []streamID{}
+	for id := range entries {
+		afterStart := id.millisecondsTime > startMs || (id.millisecondsTime == startMs && id.sequenceNumber > startSeq)
+		beforeEnd := id.millisecondsTime < endMs || (id.millisecondsTime == endMs && id.sequenceNumber <= endSeq)
+
+		if afterStart && beforeEnd {
+			matchedIDs = append(matchedIDs, id)
+		}
+	}
+
+	sort.Slice(matchedIDs, func(i int, j int) bool {
+		if matchedIDs[i].millisecondsTime == matchedIDs[j].millisecondsTime {
+			return matchedIDs[i].sequenceNumber < matchedIDs[j].sequenceNumber
+		}
+		return matchedIDs[i].millisecondsTime < matchedIDs[j].millisecondsTime
+	})
+
+	respElements := []any{}
+	for _, id := range matchedIDs {
+		fieldsMap := entries[id]
+
+		fieldVals := []string{}
+		for k, v := range fieldsMap {
+			fieldVals = append(fieldVals, k, v)
+		}
+
+		entryArray := []any{
+			id.String(),
+			fieldVals,
+		}
+		respElements = append(respElements, entryArray)
+	}
+
+	result := []any{key, respElements}
+	output := resp.EncodeNestedArray(result)
+	_, err := conn.Write(output)
+	if err != nil {
+		return
+	}
 }
